@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:14-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          envFrom:
+            - secretRef:
+                name: postgres-secret
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: timezone
+              mountPath: /etc/localtime
+              readOnly: true
+            - name: timezone-zoneinfo
+              mountPath: /usr/share/zoneinfo
+              readOnly: true
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+        - name: timezone
+          hostPath:
+            path: /etc/localtime
+        - name: timezone-zoneinfo
+          hostPath:
+            path: /usr/share/zoneinfo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  labels:
+    app: gitea
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitea
+  template:
+    metadata:
+      labels:
+        app: gitea
+    spec:
+      containers:
+        - name: gitea
+          image: gitea/gitea:latest
+          ports:
+            - containerPort: 3000
+              name: http
+            - containerPort: 22
+              name: ssh
+          env:
+            - name: GITEA__database__DB_TYPE
+              value: "postgres"
+            - name: GITEA__database__HOST
+              value: "postgres:5432"
+            - name: GITEA__database__NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: GITEA_POSTGRES_DB
+            - name: GITEA__database__USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: GITEA__database__PASSWD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: gitea-data
+              mountPath: /data
+            - name: timezone
+              mountPath: /etc/localtime
+              readOnly: true
+            - name: timezone-zoneinfo
+              mountPath: /usr/share/zoneinfo
+              readOnly: true
+      volumes:
+        - name: gitea-data
+          persistentVolumeClaim:
+            claimName: gitea-pvc
+        - name: timezone
+          hostPath:
+            path: /etc/localtime
+        - name: timezone-zoneinfo
+          hostPath:
+            path: /usr/share/zoneinfo
